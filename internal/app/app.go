@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -73,6 +74,9 @@ type App struct {
 	RecentUsageCache  *repository.UsageRecentEventCache
 	PricingCatalog    *pricing.Catalog
 	LogCloser         io.Closer
+
+	serverMu   sync.Mutex
+	httpServer *http.Server
 
 	backgroundCancel context.CancelFunc
 	backgroundWG     sync.WaitGroup
@@ -413,6 +417,12 @@ func (a *App) Close() error {
 	if a == nil {
 		return nil
 	}
+	// Stop the HTTP listener before tearing down background tasks and databases. This is
+	// important for embedded Android callers, which keep the App object alive across a
+	// configuration toggle and must not leave port 8318 bound after a stop request.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	_ = a.Shutdown(shutdownCtx)
+	cancel()
 
 	a.stopBackgroundTasks()
 	if a.QuotaService != nil {
@@ -452,11 +462,19 @@ func (a *App) Close() error {
 }
 
 func (a *App) Run() error {
+	return a.RunContext(context.Background())
+}
+
+// RunContext starts the Keeper background workers and HTTP listener until the
+// listener exits or ctx is cancelled. Run remains as the desktop-compatible
+// convenience wrapper using a never-cancelled context.
+func (a *App) RunContext(ctx context.Context) error {
 	if a == nil || a.Router == nil || a.Config == nil {
 		return fmt.Errorf("application is not initialized")
 	}
 
-	ctx := a.startBackgroundContext()
+	parentCtx := ctx
+	ctx = a.startBackgroundContext()
 	defer a.stopBackgroundTasks()
 	if a.RedisIngest != nil {
 		a.startBackgroundTask(func() {
@@ -539,10 +557,60 @@ func (a *App) Run() error {
 	}
 
 	server := NewHTTPServer(*a.Config, a.Router)
-	if a.Config.TLSEnabled {
-		return server.ListenAndServeTLS(a.Config.TLSCertFile, a.Config.TLSKeyFile)
+	a.serverMu.Lock()
+	a.httpServer = server
+	a.serverMu.Unlock()
+	defer func() {
+		a.serverMu.Lock()
+		if a.httpServer == server {
+			a.httpServer = nil
+		}
+		a.serverMu.Unlock()
+	}()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		var err error
+		if a.Config.TLSEnabled {
+			err = server.ListenAndServeTLS(a.Config.TLSCertFile, a.Config.TLSKeyFile)
+		} else {
+			err = server.ListenAndServe()
+		}
+		serverErr <- err
+	}()
+
+	select {
+	case err := <-serverErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-parentCtx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownErr := server.Shutdown(shutdownCtx)
+		cancel()
+		if shutdownErr != nil {
+			return shutdownErr
+		}
+		<-serverErr
+		return parentCtx.Err()
 	}
-	return server.ListenAndServe()
+}
+
+// Shutdown releases the HTTP listener without destroying the rest of the App.
+// It is intentionally exported so the Android facade can stop port 8318
+// gracefully before closing the SQLite/database resources.
+func (a *App) Shutdown(ctx context.Context) error {
+	if a == nil {
+		return nil
+	}
+	a.serverMu.Lock()
+	server := a.httpServer
+	a.serverMu.Unlock()
+	if server == nil {
+		return nil
+	}
+	return server.Shutdown(ctx)
 }
 
 func (a *App) startBackgroundContext() context.Context {
