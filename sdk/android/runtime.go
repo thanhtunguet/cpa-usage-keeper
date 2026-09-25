@@ -36,6 +36,7 @@ type BootstrapConfig struct {
 	CPABaseURL       string `json:"cpaBaseUrl"`
 	CPAManagementKey string `json:"-"`
 	LoginPassword    string `json:"-"`
+	AuthEnabled      bool   `json:"authEnabled"`
 }
 
 // StatusResult is safe to serialize over JNI. It intentionally contains no
@@ -48,6 +49,7 @@ type StatusResult struct {
 	TransitionTimeMs int64  `json:"transitionTimeMs"`
 	LastError        string `json:"lastError"`
 	DashboardURL     string `json:"dashboardURL"`
+	AuthEnabled      bool   `json:"authEnabled"`
 }
 
 // Runtime owns one Keeper App and its serving goroutine.
@@ -60,6 +62,7 @@ type Runtime struct {
 	desired        bool
 	host           string
 	port           int
+	authEnabled    bool
 	lastError      string
 	transitionTime int64
 }
@@ -82,7 +85,7 @@ func (r *Runtime) Start(ctx context.Context, cfg BootstrapConfig) error {
 
 	r.mu.Lock()
 	if r.running {
-		if r.host == cfg.BindHost && r.port == cfg.Port && r.workspace() == cfg.WorkspaceDir {
+		if r.host == cfg.BindHost && r.port == cfg.Port && r.workspace() == cfg.WorkspaceDir && r.authEnabled == cfg.AuthEnabled {
 			r.mu.Unlock()
 			return nil
 		}
@@ -115,7 +118,7 @@ func (r *Runtime) Start(ctx context.Context, cfg BootstrapConfig) error {
 		LogFileEnabled:                true,
 		LogDir:                        filepath.Join(cfg.WorkspaceDir, "logs"),
 		LogRetentionDays:              7,
-		AuthEnabled:                   true,
+		AuthEnabled:                   cfg.AuthEnabled,
 		LoginPassword:                 cfg.LoginPassword,
 		AuthSessionTTL:                7 * 24 * time.Hour,
 		RedisQueueBatchSize:           keeperconfig.RedisQueueBatchSizeDefault,
@@ -124,9 +127,9 @@ func (r *Runtime) Start(ctx context.Context, cfg BootstrapConfig) error {
 		QuotaRefreshWorkerLimit:       keeperconfig.QuotaRefreshWorkerLimitDefault,
 		QuotaUpstreamResponsesEnabled: false,
 	}
-	if appCfg.LoginPassword == "" {
+	if appCfg.AuthEnabled && appCfg.LoginPassword == "" {
 		// Keep the facade single-secret: CPA_MANAGEMENT_KEY is already required
-		// for data ingestion, so it also protects the dashboard login.
+		// for data ingestion, so it also protects the dashboard login when auth is enabled.
 		appCfg.LoginPassword = cfg.CPAManagementKey
 	}
 
@@ -173,6 +176,7 @@ func (r *Runtime) Start(ctx context.Context, cfg BootstrapConfig) error {
 	r.desired = true
 	r.host = cfg.BindHost
 	r.port = cfg.Port
+	r.authEnabled = cfg.AuthEnabled
 	r.lastError = ""
 	r.transitionTime = time.Now().UnixMilli()
 	r.mu.Unlock()
@@ -246,6 +250,7 @@ func (r *Runtime) Status() StatusResult {
 		TransitionTimeMs: r.transitionTime,
 		LastError:        r.lastError,
 		DashboardURL:     fmt.Sprintf("http://%s:%d/", urlHost, r.port),
+		AuthEnabled:      r.authEnabled,
 	}
 }
 

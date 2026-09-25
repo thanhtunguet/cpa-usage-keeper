@@ -33,3 +33,14 @@ func TestRuntimeStatusNeverContainsSecret(t *testing.T) {
 		t.Fatalf("dashboard URL leaked management key: %q", status.DashboardURL)
 	}
 }
+
+func TestRuntimeStatusReflectsAuthEnabled(t *testing.T) {
+	r := NewRuntime()
+	if r.Status().AuthEnabled {
+		t.Fatalf("expected AuthEnabled default to be false, got true")
+	}
+	r.authEnabled = true
+	if !r.Status().AuthEnabled {
+		t.Fatalf("expected AuthEnabled to be true, got false")
+	}
+}
