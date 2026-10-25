@@ -29,6 +29,7 @@ const event: UsageEvent = {
   model_alias: 'keeper-gpt',
   reasoning_effort: 'high',
   service_tier: 'priority',
+  effective_service_tier: 'ultrafast',
   response_service_tier: 'flex',
   executor_type: 'OpenAIResponsesExecutor',
   endpoint: 'POST /v1/responses',
@@ -188,8 +189,9 @@ describe('CredentialRequestEventsList', () => {
     const apiKeyCell = container.querySelector('tbody tr:first-child td:nth-child(2)')
     expect(apiKeyCell?.textContent).toBe('Team Alpha')
     expect(container.textContent).toContain('SSE')
-    expect(container.textContent).not.toContain('usage_stats.speed_mode_fast')
-    expect(container.textContent).not.toContain('usage_stats.speed_mode_flex')
+    expect(container.textContent).not.toContain('priority')
+    expect(container.textContent).not.toContain('ultrafast')
+    expect(container.textContent).not.toContain('flex')
     expect(container.textContent).toContain('1.30K')
     expect(container.textContent).toContain('1.00K')
     expect(container.textContent).toContain('300')
@@ -362,12 +364,19 @@ describe('CredentialRequestEventsList', () => {
     const details = container.querySelector('[data-credential-request-event-details="1"]')
     expect(toggle!.getAttribute('aria-expanded')).toBe('true')
     expect(details?.querySelectorAll('[data-credential-request-detail-group]')).toHaveLength(2)
-    expect(details?.querySelectorAll('[data-credential-request-detail-item]')).toHaveLength(6)
+    expect(details?.querySelectorAll('[data-credential-request-detail-item]')).toHaveLength(7)
     expect(details?.textContent).toContain('usage_stats.credentials_detail_request_context')
     expect(details?.textContent).toContain('usage_stats.credentials_detail_client_context')
     expect(details?.textContent).not.toContain('Team Alpha')
-    expect(details?.textContent).toContain('usage_stats.speed_mode_fast (priority)')
-    expect(details?.textContent).toContain('usage_stats.speed_mode_flex (flex)')
+    expect(Array.from(details!.querySelectorAll('[data-credential-request-detail-group="request"] strong'), (node) => node.textContent))
+      .toEqual(['usage_stats.speed_mode_ultrafast (ultrafast)', 'usage_stats.speed_mode_fast (priority)', 'usage_stats.speed_mode_flex (flex)', 'OpenAIResponsesExecutor'])
+    expect(Array.from(details!.querySelectorAll('[data-credential-request-detail-group="request"] [data-credential-request-detail-item] > span'), (node) => node.textContent))
+      .toEqual([
+        'usage_stats.credentials_detail_effective_tier',
+        'usage_stats.credentials_detail_request_tier',
+        'usage_stats.credentials_detail_response_tier',
+        'usage_stats.credentials_detail_executor',
+      ])
     expect(details?.textContent).toContain('OpenAIResponsesExecutor')
     expect(details?.textContent).toContain('192.0.2.10')
     expect(details?.textContent).toContain('198.51.100.7, 192.0.2.10')
@@ -384,6 +393,7 @@ describe('CredentialRequestEventsList', () => {
         events={[{
           ...event,
           service_tier: '',
+          effective_service_tier: '',
           response_service_tier: '',
           executor_type: '',
           client_ip: '',
@@ -396,6 +406,40 @@ describe('CredentialRequestEventsList', () => {
     expect(container.textContent).toContain('Team Alpha')
     expect(container.querySelector('[data-credential-request-event-toggle="1"]')).toBeNull()
     expect(container.querySelector('[data-credential-request-event-details="1"]')).toBeNull()
+  })
+
+  it.each([
+    ['CustomTier', 'CustomTier (CustomTier)'],
+    ['ultrafast', 'usage_stats.speed_mode_ultrafast (ultrafast)'],
+    ['', '-'], [undefined, '-'],
+  ])(
+    'shows the mapped effective tier %j with its raw value and dashes without parentheses', async (effectiveTier, expected) => {
+      await act(async () => root.render(
+        <CredentialRequestEventsList {...credentialEventListDefaults} events={[{
+          ...event, service_tier: '', effective_service_tier: effectiveTier, response_service_tier: undefined,
+        }]} />,
+      ))
+      await act(async () => container.querySelector<HTMLButtonElement>('[data-credential-request-event-toggle="1"]')!.click())
+      const values = Array.from(container.querySelectorAll('[data-credential-request-detail-group="request"] strong'), (node) => node.textContent)
+      expect(values).toEqual([expected, '-', '-', 'OpenAIResponsesExecutor'])
+    },
+  )
+
+  it.each([
+    ['ultrafast', 'usage_stats.speed_mode_ultrafast (ultrafast)'],
+    ['-', '- (-)'],
+    [' - ', '- (-)'],
+  ])('allows expansion when only the outbound tier %j is present', async (effectiveTier, expected) => {
+    await act(async () => root.render(
+      <CredentialRequestEventsList {...credentialEventListDefaults} events={[{
+        ...event, service_tier: '', effective_service_tier: effectiveTier, response_service_tier: '', executor_type: '',
+        client_ip: '', x_forwarded_for: '', user_agent: '',
+      }]} />,
+    ))
+    const toggle = container.querySelector<HTMLButtonElement>('[data-credential-request-event-toggle="1"]')!
+    expect(toggle).not.toBeNull()
+    await act(async () => toggle.click())
+    expect(container.querySelector('[data-credential-request-event-details="1"]')?.textContent).toContain(expected)
   })
 
   it('shows the shared tooltip only when compact or detail text is actually truncated', async () => {

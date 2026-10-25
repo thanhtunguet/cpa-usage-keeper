@@ -11,7 +11,8 @@ const event: UsageEvent = {
   model: 'gpt-5.6',
   model_alias: 'keeper-gpt',
   reasoning_effort: 'high',
-  service_tier: 'priority',
+  service_tier: 'auto',
+  effective_service_tier: 'priority',
   response_service_tier: 'flex',
   endpoint: 'POST /v1/messages',
   executor_type: 'OpenAIResponsesExecutor',
@@ -89,7 +90,7 @@ describe('RequestEventsDetailsCard compact columns', () => {
     expect(cells[2]).not.toContain('openai')
     expect(cells[3]).toBe('gpt-5.6keeper-gpt')
     expect(cells[4]).toBe('high')
-    expect(cells[5]).toBe('Fast / Flex')
+    expect(cells[5]).toBe('Fast')
     expect(cells[7]).toBe('SSE/messages')
     expect(cells[8]).toBe('120msTTFT 45ms')
     expect(cells[9]).toBe('30.0 t/s')

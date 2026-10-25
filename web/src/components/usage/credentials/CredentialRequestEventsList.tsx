@@ -25,6 +25,7 @@ import {
 import { useScrollBoundaryContainment } from '@/hooks/useScrollBoundaryContainment'
 import type { UsageEvent } from '@/lib/types'
 import { calculateCacheReadRate, formatCompactTokenValue, formatDurationMs, formatUsd } from '@/utils/usage'
+import { formatServiceTierDetail } from '@/utils/usage/serviceTier'
 import {
   buildUsageModelTooltipLines,
   getUsageModelDisplay,
@@ -64,6 +65,7 @@ interface CredentialRequestEventRow {
   timestampDateLabel: string
   apiKey: string
   requestTier: string
+  effectiveTier: string
   responseTier: string
   model: string
   responseModel: string
@@ -342,15 +344,6 @@ function CredentialRequestEventsMetricCell({
   )
 }
 
-const SPEED_MODE_LABEL_KEYS: Record<string, string> = {
-  auto: 'usage_stats.speed_mode_auto',
-  default: 'usage_stats.speed_mode_standard',
-  standard: 'usage_stats.speed_mode_standard',
-  priority: 'usage_stats.speed_mode_fast',
-  fast: 'usage_stats.speed_mode_fast',
-  flex: 'usage_stats.speed_mode_flex',
-}
-
 const toNumber = (value: unknown): number => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0
@@ -363,19 +356,6 @@ const formatTimestamp = (timestamp: string): { time: string; date: string } => {
     time: `${match[4]}:${match[5]}:${match[6]}`,
     date: `${match[1]}/${match[2]}/${match[3]}`,
   }
-}
-
-const formatSpeedMode = (value: unknown, t: (key: string) => string): string => {
-  const normalized = String(value ?? '').trim()
-  if (!normalized) return '-'
-  const labelKey = SPEED_MODE_LABEL_KEYS[normalized.toLowerCase()]
-  return labelKey ? t(labelKey) : normalized
-}
-
-const formatSpeedModeDetailValue = (value: unknown, t: (key: string) => string): string => {
-  const rawValue = optionalText(value)
-  const displayValue = formatSpeedMode(rawValue, t)
-  return rawValue === '-' ? displayValue : `${displayValue} (${rawValue})`
 }
 
 const formatSpeed = (value: unknown): string => {
@@ -455,8 +435,9 @@ const buildRow = (
   const inputTokens = toNumber(event.tokens?.input_tokens)
   const cacheReadTokens = toNumber(event.tokens?.cache_read_tokens)
   const apiKey = optionalText(event.api_key)
-  const requestTier = formatSpeedModeDetailValue(event.service_tier, t)
-  const responseTier = formatSpeedModeDetailValue(event.response_service_tier, t)
+  const requestTier = formatServiceTierDetail(event.service_tier, t)
+  const effectiveTier = formatServiceTierDetail(event.effective_service_tier, t)
+  const responseTier = formatServiceTierDetail(event.response_service_tier, t)
   const executorType = optionalText(event.executor_type)
   const clientIP = optionalText(event.client_ip)
   const xForwardedFor = optionalText(event.x_forwarded_for)
@@ -478,6 +459,7 @@ const buildRow = (
     timestampDateLabel: timestampLabels.date,
     apiKey,
     requestTier,
+    effectiveTier,
     responseTier,
     model: modelDisplay.model,
     responseModel: modelDisplay.responseModel,
@@ -509,7 +491,7 @@ const buildRow = (
     clientIP,
     xForwardedFor,
     userAgent,
-    canExpand: [requestTier, responseTier, executorType, clientIP, xForwardedFor, userAgent]
+    canExpand: [requestTier, effectiveTier, responseTier, executorType, clientIP, xForwardedFor, userAgent]
       .some((value) => value !== '-'),
   }
 }
@@ -833,6 +815,10 @@ export function CredentialRequestEventsList({
                 <section className={styles.detailGroup} data-credential-request-detail-group="request">
                   <h4>{t('usage_stats.credentials_detail_request_context')}</h4>
                   <div className={styles.detailGrid}>
+                    <div className={styles.detailItem} data-credential-request-detail-item>
+                      <span>{t('usage_stats.credentials_detail_effective_tier')}</span>
+                      {renderOverflowText('strong', row.effectiveTier)}
+                    </div>
                     <div className={styles.detailItem} data-credential-request-detail-item>
                       <span>{t('usage_stats.credentials_detail_request_tier')}</span>
                       {renderOverflowText('strong', row.requestTier)}
