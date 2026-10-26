@@ -25,6 +25,7 @@ import {
 import { useScrollBoundaryContainment } from '@/hooks/useScrollBoundaryContainment'
 import type { UsageEvent } from '@/lib/types'
 import { calculateCacheReadRate, formatCompactTokenValue, formatDurationMs, formatUsd } from '@/utils/usage'
+import { parseRequestEndpoint } from '@/utils/usage/requestEndpoint'
 import { formatServiceTierDetail } from '@/utils/usage/serviceTier'
 import {
   buildUsageModelTooltipLines,
@@ -407,18 +408,6 @@ const buildCredentialRequestModelTooltipLines = (
 )
 
 const optionalText = (value: unknown): string => String(value ?? '').trim() || '-'
-
-const parseRequestEndpoint = (rawEndpoint: unknown): { requestType: string; endpoint: string } => {
-  const raw = String(rawEndpoint ?? '').trim().replace(/\s+/g, ' ')
-  if (!raw) return { requestType: '-', endpoint: '-' }
-  const [first, ...rest] = raw.split(' ')
-  const upperMethod = first.toUpperCase()
-  const hasMethod = upperMethod === 'GET' || upperMethod === 'POST'
-  const requestType = upperMethod === 'POST' ? 'SSE' : upperMethod === 'GET' ? 'WS' : '-'
-  const path = hasMethod ? rest.join(' ').trim() : raw
-  const normalizedPath = path.startsWith('/v1/') ? path.slice(3) : path === '/v1' ? '/' : path
-  return { requestType, endpoint: normalizedPath || '-' }
-}
 
 const buildRow = (
   event: UsageEvent,

@@ -33,6 +33,7 @@ import type { UsageEvent, UsageEventRequestLogResponse, UsageSourceFilterOption 
 import { useScrollBoundaryContainment } from '@/hooks/useScrollBoundaryContainment';
 import { copyTextToClipboard } from '@/utils/clipboard';
 import { compareModelNames } from '@/utils/modelSort';
+import { parseRequestEndpoint } from '@/utils/usage/requestEndpoint';
 import { formatServiceTier, formatServiceTierDetail } from '@/utils/usage/serviceTier';
 import {
   buildUsageModelTooltipLines,
@@ -501,20 +502,6 @@ const buildModelTooltipLines = (
   },
   (label, value) => formatRequestEventMetricTooltipLine(label, value, t),
 );
-
-const parseRequestEndpoint = (rawEndpoint: unknown): { requestType: string; endpoint: string } => {
-  const raw = String(rawEndpoint ?? '').trim().replace(/\s+/g, ' ');
-  if (!raw) {
-    return { requestType: '-', endpoint: '-' };
-  }
-  const [first, ...rest] = raw.split(' ');
-  const upperMethod = first.toUpperCase();
-  const hasMethod = ['GET', 'POST'].includes(upperMethod);
-  const requestType = upperMethod === 'POST' ? 'SSE' : upperMethod === 'GET' ? 'WS' : '-';
-  const path = hasMethod ? rest.join(' ').trim() : raw;
-  const normalizedPath = path.startsWith('/v1/') ? path.slice(3) : path === '/v1' ? '/' : path;
-  return { requestType, endpoint: normalizedPath || '-' };
-};
 
 function RequestEventsExportMenu({
   label,

@@ -105,8 +105,10 @@ describe('RequestEventsDetailsCard', () => {
   });
 
   it.each([
-    ['GET /v1/responses', 'WS/responses'],
-    ['/v1/chat/completions', '-/chat/completions'],
+    ['POST /backend-api/codex/responses', 'SSE/v1/responses'],
+    ['POST /v1/tts', 'SSE/v1/audio/speech'],
+    ['GET /v1/responses', 'WS/v1/responses'],
+    ['/v1/chat/completions', '-/v1/chat/completions'],
   ])('formats endpoint %j', (endpoint, expected) => {
     const html = renderCard({ events: [{ ...events[0], endpoint }] });
     expect(tableValues(html).Request).toBe(expected);

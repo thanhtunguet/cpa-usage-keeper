@@ -72,6 +72,9 @@ type queuedUsageDetail struct {
 	Stream               *bool           `json:"stream"`
 	Fail                 redisUsageFail  `json:"fail"`
 	ResponseHeaders      json.RawMessage `json:"response_headers"`
+	// 保留原始 JSON，让不可用的可选 accounting 回退旧流程，而不把整条 usage 判成解码失败。
+	AccountingVersion json.RawMessage `json:"accounting_version"`
+	TokenBreakdown    json.RawMessage `json:"token_breakdown"`
 }
 
 type redisUsageFail struct {
@@ -187,6 +190,8 @@ func (d queuedUsageDetail) toUsageEvent(fetchedAt time.Time) entities.UsageEvent
 		CacheReadPresent:     d.Tokens.CacheReadPresent,
 		CacheCreationTokens:  d.Tokens.CacheCreationTokens,
 		TotalTokens:          d.Tokens.TotalTokens,
+		AccountingVersion:    d.AccountingVersion,
+		TokenBreakdown:       d.TokenBreakdown,
 	}
 }
 

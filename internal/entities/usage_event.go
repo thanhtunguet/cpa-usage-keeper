@@ -1,6 +1,9 @@
 package entities
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // UsageEvent 是落库后的单条 usage 请求事件实体。
 type UsageEvent struct {
@@ -46,6 +49,9 @@ type UsageEvent struct {
 	CacheReadPresent     bool  `gorm:"-" json:"-"` // 仅在 Redis 入库归一化期间区分 CPA canonical zero 与旧 payload。
 	CacheCreationTokens  int64 `gorm:"not null;default:0"`
 	TotalTokens          int64
+	// CPA accounting 只供本次入站归一化使用；原始消息由 inbox 保留，不新增存储列或 API 字段。
+	AccountingVersion json.RawMessage `gorm:"-" json:"-"`
+	TokenBreakdown    json.RawMessage `gorm:"-" json:"-"`
 	// 费用回填前保持 NULL；正常入库必须同时明确金额与可用性。
 	CostUSD       *float64  `gorm:"column:cost_usd;type:real"`
 	CostAvailable *bool     `gorm:"column:cost_available;type:boolean"`
